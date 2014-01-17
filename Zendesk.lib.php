@@ -78,11 +78,15 @@ define('ZENDESK_ATTACHMENTS', ZENDESK_UPLOADS);
 
 class Zendesk
 {
-	function Zendesk($account, $username, $password, $use_curl = true, $use_https = true)
+	function Zendesk($account, $username, $password, $isToken=true, $use_curl = true, $use_https = true)
 	{
 		$this->account = $account;
 		$this->secure = $use_https;
-		
+        $this->isToken=$isToken;
+
+        $tokenStr = $isToken ? '/token' : '';
+        $username .= $tokenStr;
+
 		if (function_exists('curl_init') && $use_curl)
 		{
 			$this->curl = curl_init();
@@ -112,7 +116,7 @@ class Zendesk
 	{
 		$this->result = array('header' => null, 'content' => null);
 		
-		$url = 'http' . ( $this->secure ? 's' : '' ) . "://{$this->account}/api/v2/$page";
+		$url = 'http' . ( $this->secure ? 's' : '' ) . "://{$this->account}.zendesk.com/api/v2/$page";
 		if (isset($opts['id']))
 			$url .= "/{$opts['id']}";
 		$url .= '.json';
@@ -158,6 +162,7 @@ class Zendesk
 			$header = substr($result,0,$info['header_size']);
 			$body = substr($result, $info['header_size']);
 			$this->result = array('header' => $header, 'content' => $body, 'code' => $info['http_code']);
+
 		}
 		else
 		{
@@ -218,11 +223,17 @@ class Zendesk
 			$root = $this->_singular($page);
 						
 		$args['data'] = json_encode(array($root => $args['details']));
+        $this->_request($page, $args, 'POST');
 
-		$this->_request($page, $args, 'POST');
 		if ($this->result['code'] == 201) {
-			if (preg_match("!https?://{$this->account}/api/v2/$page/#?(\d+)!i", $this->result['header'], $match))
-				return $match[1];
+
+            $resp = json_decode($this->result['content']);
+            if(isset($resp->ticket)){
+                return $resp->ticket->id;
+            }
+
+//			if (preg_match("!https?://{$this->account}/api/v2/$page/#?(\d+)!i", $this->result['header'], $match))
+//				return $match[1];
 			// regexp failed, this is not good and shouldn't happen, but I don't want to return false...
 			return true;
 		}
